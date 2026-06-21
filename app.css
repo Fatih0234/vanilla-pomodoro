@@ -270,7 +270,12 @@ a { color: inherit; }
 .task-item.dragging { opacity: 0.4; cursor: grabbing; }
 .task-item.drop-before { box-shadow: inset 0 2px 0 #ffffff; }
 .task-item.drop-after { box-shadow: inset 0 -2px 0 #ffffff; }
-.task-item.active { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.3); }
+.task-item.active {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: inset 4px 0 0 #ffffff;
+}
+.task-item.active:hover { background: rgba(255, 255, 255, 0.34); }
 .task-item.completed { opacity: 0.55; }
 .task-item.completed .task-name { text-decoration: line-through; }
 .task-grip {
@@ -887,6 +892,25 @@ a { color: inherit; }
 .dialog-body { display: flex; flex-direction: column; gap: 1rem; }
 .dialog-actions { display: flex; gap: 0.75rem; margin-top: 0.5rem; }
 .dialog-actions .btn { flex: 1; }
+
+/* Spread variant: first child on the left, .dialog-actions-right group on
+   the right (used by the edit-task dialog to fit a danger icon on the left
+   and Cancel/Save together on the right). */
+.dialog-actions-spread { justify-content: space-between; align-items: center; }
+.dialog-actions-spread .btn { flex: none; }
+.dialog-actions-right { display: flex; gap: 0.5rem; }
+
+/* Ghost icon button: transparent until hover, then a soft red tint. Used
+   for the delete affordance in dialogs. */
+.btn-icon-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: rgba(255, 255, 255, 0.6);
+}
+.btn-icon-ghost:hover {
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+}
 .pomo-stepper { display: flex; align-items: center; gap: 0.5rem; }
 .pomo-stepper button {
   background: rgba(255, 255, 255, 0.1);
