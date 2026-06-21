@@ -478,7 +478,6 @@
       colorPickerFor: null,
       addTaskOpen: false,
       editingTaskId: null,
-      taskMenuId: null,
       tasksMenuOpen: false,
       projectManagerOpen: false,
       templateSelectorOpen: false,
@@ -562,6 +561,7 @@
     renderTimerDisplay();
     renderTimerControls();
     renderTimerBackground();
+    renderDocumentTitle();
     setSrStatus(`${labelForMode(mode)} ready`);
   };
 
@@ -599,6 +599,7 @@
     startBackupInterval();
     renderTimerControls();
     renderTimerBackground();
+    renderDocumentTitle();
     setSrStatus('Timer running');
   };
 
@@ -611,6 +612,7 @@
     timer.status = 'paused';
     renderTimerControls();
     renderTimerBackground();
+    renderDocumentTitle();
     setSrStatus('Timer paused');
   };
 
@@ -628,6 +630,7 @@
     renderTimerDisplay();
     renderTimerControls();
     renderTimerBackground();
+    renderDocumentTitle();
     setSrStatus('Timer reset');
     clearTimerBackup();
   };
@@ -647,6 +650,7 @@
     if (newRemaining !== timer.remainingSeconds) {
       timer.remainingSeconds = newRemaining;
       renderTimerDisplay();
+      renderDocumentTitle();
     }
     if (newRemaining === 0) {
       finishTimer();
@@ -685,6 +689,7 @@
     renderTimerDisplay();
     renderTimerControls();
     renderTimerBackground();
+    renderDocumentTitle();
     renderTaskList();
     renderActiveTaskHint();
     setSrStatus(`${labelForMode(nextMode)} ready`);
@@ -831,6 +836,27 @@
 
   const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2));
 
+  // Invariant: the first non-completed task is always the active one.
+  // `reconcileActiveTask` enforces that invariant; call it after any
+  // structural change to state.tasks. Returns true if activeTaskId changed.
+  const reconcileActiveTask = () => {
+    const firstOpen = state.tasks.find(t => !t.isCompleted);
+    const desiredId = firstOpen ? firstOpen.id : null;
+    if (desiredId === timer.activeTaskId) return false;
+    timer.activeTaskId = desiredId;
+    state.tasks.forEach(t => { t.isActive = t.id === desiredId; });
+    return true;
+  };
+
+  // Move a task to the top of the list (no-op if already first or not found).
+  const moveTaskToTop = (id) => {
+    const idx = state.tasks.findIndex(t => t.id === id);
+    if (idx <= 0) return;
+    const [moved] = state.tasks.splice(idx, 1);
+    state.tasks.unshift(moved);
+    saveTasks();
+  };
+
   const addTask = (name, estimatedPomodoros = 1, projectId = null, notes = '') => {
     const task = {
       id: newId(),
@@ -844,6 +870,7 @@
       lastCompletedSessionId: null,
     };
     state.tasks.push(task);
+    reconcileActiveTask();
     saveTasks();
     renderTaskList();
   };
@@ -860,11 +887,13 @@
   const deleteTask = (id) => {
     state.tasks = state.tasks.filter(t => t.id !== id);
     if (timer.activeTaskId === id) {
-      timer.activeTaskId = null;
+      timer.activeTaskId = null; // belt-and-suspenders; reconcile fixes it
     }
+    reconcileActiveTask();
     saveTasks();
     renderTaskList();
     renderActiveTaskHint();
+    renderDocumentTitle();
   };
 
   const toggleTaskCompletion = (id) => {
@@ -874,25 +903,20 @@
     if (task.isCompleted) {
       task.isActive = false;
     }
+    reconcileActiveTask();
     saveTasks();
     renderTaskList();
     renderActiveTaskHint();
-  };
-
-  const setActiveTask = (id) => {
-    const idToSet = state.tasks.some(t => t.id === id && !t.isCompleted) ? id : null;
-    timer.activeTaskId = idToSet;
-    state.tasks.forEach(t => { t.isActive = t.id === idToSet; });
-    saveTasks();
-    renderTaskList();
-    renderActiveTaskHint();
+    renderDocumentTitle();
   };
 
   const clearCompletedTasks = () => {
     state.tasks = state.tasks.filter(t => !t.isCompleted);
+    reconcileActiveTask();
     saveTasks();
     renderTaskList();
     renderActiveTaskHint();
+    renderDocumentTitle();
   };
 
   const incrementPomodoro = (id, sessionId) => {
@@ -905,6 +929,7 @@
       task.isCompleted = true;
       task.isActive = false;
     }
+    reconcileActiveTask();
     saveTasks();
   };
 
@@ -912,6 +937,7 @@
     if (fromIndex === toIndex) return;
     const [moved] = state.tasks.splice(fromIndex, 1);
     state.tasks.splice(toIndex, 0, moved);
+    reconcileActiveTask();
     saveTasks();
   };
 
@@ -971,17 +997,17 @@
   const applyTemplate = (templateId) => {
     const tpl = state.templates.find(t => t.id === templateId);
     if (!tpl) return;
-    const newTasks = tpl.tasks.map((t, i) => ({
+    const newTasks = tpl.tasks.map((t) => ({
       id: newId(),
       name: t.name,
       estimatedPomodoros: t.estimatedPomodoros,
       completedPomodoros: 0,
-      isActive: i === 0,
+      isActive: false,
       isCompleted: false,
       lastCompletedSessionId: null,
     }));
     state.tasks = newTasks;
-    timer.activeTaskId = newTasks[0]?.id || null;
+    reconcileActiveTask();
     saveTasks();
     renderTaskList();
     renderActiveTaskHint();
@@ -1032,6 +1058,22 @@
       time = root.querySelector('.timer-display-time');
     }
     time.textContent = formatMMSS(timer.remainingSeconds);
+  };
+
+  // Reflect the remaining time in the browser tab title while running, and
+  // restore the default brand title when the timer is paused or idle. The
+  // caller is responsible for only invoking this when the visible second
+  // changes (or on a state transition) — see tick() below.
+  const DEFAULT_TITLE = document.title;
+  const renderDocumentTitle = () => {
+    if (timer.status !== 'running') {
+      document.title = DEFAULT_TITLE;
+      return;
+    }
+    const time = formatMMSS(timer.remainingSeconds);
+    const active = state.tasks.find(t => t.id === timer.activeTaskId && !t.isCompleted);
+    const label = active ? active.name : labelForMode(timer.mode);
+    document.title = `${time} · ${label}`;
   };
 
   const renderTimerControls = () => {
@@ -1161,27 +1203,12 @@
           </div>
           ${task.notes ? `<div class="task-notes">${escapeHTML(task.notes)}</div>` : ''}
         </div>
-        <button type="button" class="task-menu-btn" aria-label="Task options" data-action="open-menu" data-task-id="${task.id}">
+        <button type="button" class="task-menu-btn" aria-label="Edit task" data-action="open-menu" data-task-id="${task.id}">
           <span data-icon="more-vertical" aria-hidden="true"></span>
         </button>
-        ${state.ui.taskMenuId === task.id ? renderTaskActionsMenu(task) : ''}
       </li>
     `;
   };
-
-  const renderTaskActionsMenu = (task) => `
-    <div class="task-actions-menu" data-task-menu-id="${task.id}">
-      <button type="button" data-action="set-active" data-task-id="${task.id}">
-        <span data-icon="check" aria-hidden="true"></span>${task.id === timer.activeTaskId ? 'Active' : 'Set Active'}
-      </button>
-      <button type="button" data-action="edit" data-task-id="${task.id}">
-        <span data-icon="edit-3" aria-hidden="true"></span>Edit
-      </button>
-      <button type="button" class="danger" data-action="delete" data-task-id="${task.id}">
-        <span data-icon="trash-2" aria-hidden="true"></span>Delete
-      </button>
-    </div>
-  `;
 
   const attachTaskListEvents = (signal) => {
     const section = $('#tasks-section');
@@ -1221,6 +1248,25 @@
 
     // Per-task events (delegation)
     section.addEventListener('click', (e) => {
+      // Click on the row body (not on any action button) → promote this task
+      // to the top of the list, which makes it the active one by the
+      // first-non-completed invariant.
+      if (!e.target.closest('[data-action]')) {
+        const li = e.target.closest('.task-item');
+        if (li && li.dataset.taskId) {
+          const id = li.dataset.taskId;
+          const task = state.tasks.find(t => t.id === id);
+          if (task && !task.isCompleted) {
+            moveTaskToTop(id);
+            reconcileActiveTask();
+            renderTaskList();
+            renderActiveTaskHint();
+            renderDocumentTitle();
+          }
+        }
+        return;
+      }
+
       const action = e.target.closest('[data-action]')?.dataset.action;
       if (!action) return;
       const id = e.target.closest('[data-action]')?.dataset.taskId;
@@ -1228,27 +1274,9 @@
 
       if (action === 'toggle') toggleTaskCompletion(id);
       else if (action === 'open-menu') {
-        state.ui.taskMenuId = state.ui.taskMenuId === id ? null : id;
-        renderTaskList();
-      } else if (action === 'set-active') {
-        setActiveTask(id);
-        state.ui.taskMenuId = null;
-        renderTaskList();
-      } else if (action === 'edit') {
+        // 3-dots: open the edit dialog directly (no in-row menu).
         state.ui.editingTaskId = id;
-        state.ui.taskMenuId = null;
         openAddTaskDialog();
-      } else if (action === 'delete') {
-        const t = state.tasks.find(x => x.id === id);
-        if (!t) return;
-        state.ui.taskMenuId = null;
-        state.ui.confirm = {
-          title: 'Delete task?',
-          message: `"${t.name}" will be removed. This cannot be undone.`,
-          danger: true,
-          onConfirm: () => deleteTask(id),
-        };
-        openConfirmDialog();
       }
     }, { signal });
 
@@ -1389,17 +1417,12 @@
       if ($('#modal-root').firstChild) closeModal();
       else if ($('#dialog-root').firstChild) closeDialog();
       else if (state.ui.tasksMenuOpen) { state.ui.tasksMenuOpen = false; renderTaskList(); }
-      else if (state.ui.taskMenuId) { state.ui.taskMenuId = null; renderTaskList(); }
     }
   });
 
   document.addEventListener('click', (e) => {
     if (state.ui.tasksMenuOpen && !e.target.closest('#tasks-menu') && !e.target.closest('#btn-tasks-menu')) {
       state.ui.tasksMenuOpen = false;
-      renderTaskList();
-    }
-    if (state.ui.taskMenuId && !e.target.closest('.task-actions-menu') && !e.target.closest('[data-action="open-menu"]')) {
-      state.ui.taskMenuId = null;
       renderTaskList();
     }
   });
@@ -2139,9 +2162,16 @@
               <span data-icon="sticky-note" aria-hidden="true"></span>Add notes
             </button>
           `}
-          <div class="dialog-actions">
-            <button type="button" class="btn" id="btn-cancel-task">Cancel</button>
-            <button type="button" class="btn btn-primary" id="btn-save-task">${editing ? 'Save' : 'Add Task'}</button>
+          <div class="dialog-actions ${editing ? 'dialog-actions-spread' : ''}">
+            ${editing ? `
+              <button type="button" class="btn btn-icon btn-icon-ghost" id="btn-delete-task" aria-label="Delete task" title="Delete task">
+                <span data-icon="trash-2" aria-hidden="true"></span>
+              </button>
+            ` : ''}
+            <div class="dialog-actions-right">
+              <button type="button" class="btn" id="btn-cancel-task">Cancel</button>
+              <button type="button" class="btn btn-primary" id="btn-save-task">${editing ? 'Save' : 'Add Task'}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -2152,6 +2182,17 @@
   };
 
   const attachAddTaskEvents = (editing) => {
+    $('#btn-delete-task')?.addEventListener('click', () => {
+      const t = state.tasks.find(x => x.id === editing.id);
+      if (!t) return;
+      state.ui.confirm = {
+        title: 'Delete task?',
+        message: `"${t.name}" will be removed. This cannot be undone.`,
+        danger: true,
+        onConfirm: () => deleteTask(editing.id),
+      };
+      openConfirmDialog();
+    });
     $('#btn-cancel-task')?.addEventListener('click', () => { state.ui.addTaskOpen = false; state.ui.editingTaskId = null; closeDialog(); });
     $('#btn-add-notes')?.addEventListener('click', () => { addTaskShowNotes = true; renderAddTaskDialog(editing); });
     $('#btn-manage-projects-inline')?.addEventListener('click', () => {
@@ -2543,6 +2584,7 @@
 
   const init = async () => {
     await loadState();
+    reconcileActiveTask();
     restoreTimerFromBackup();
     // Re-sync the timer object's duration with the freshly-loaded settings
     // (settings were updated by loadState; the timer was captured at IIFE
