@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#BA4949" />
+  <title>Pomofocus</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/%3E%3Cpolyline points='22 4 12 14.01 9 11.01'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div id="root" class="app">
+    <div class="sr-only" role="status" aria-live="polite" id="sr-status">Timer ready</div>
+
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-icon" data-icon="check-circle" aria-hidden="true"></span>
+        <h1 class="brand-name">Pomofocus</h1>
+      </div>
+      <div class="app-header-actions">
+        <button type="button" class="btn btn-ghost" id="btn-reports" aria-label="View reports">
+          <span data-icon="bar-chart" aria-hidden="true"></span>
+          <span class="btn-label">Reports</span>
+        </button>
+        <button type="button" class="btn btn-ghost btn-icon" id="btn-settings" aria-label="Open settings">
+          <span data-icon="settings" aria-hidden="true"></span>
+        </button>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <div class="timer-wrap">
+        <section class="timer-card" aria-label="Timer">
+          <div class="mode-selector" id="mode-selector" role="radiogroup" aria-label="Timer mode"></div>
+          <div class="timer-display" id="timer-display" aria-live="off" aria-atomic="true">25:00</div>
+          <div class="timer-controls" id="timer-controls"></div>
+        </section>
+      </div>
+
+      <div class="active-task-hint" id="active-task-hint" aria-live="polite"></div>
+
+      <section class="tasks-section" id="tasks-section" aria-label="Tasks"></section>
+
+      <footer class="app-footer" id="app-footer"></footer>
+    </main>
+
+    <div id="modal-root"></div>
+    <div id="dialog-root"></div>
+  </div>
+
+  <script src="vendor/dexie.min.js"></script>
+  <script src="db.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
